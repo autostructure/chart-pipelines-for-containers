@@ -1,0 +1,93 @@
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: pipelines-for-containers-mariadb
+  labels:
+    app: pipelines-for-containers
+  namespace: ci-cd
+spec:
+  ports:
+    - port: 3306
+  selector:
+    app: pipelines-for-containers
+    tier: database
+  clusterIP: None
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pipelines-for-containers-mariadb-claim
+  labels:
+    app: pipelines-for-containers
+  namespace: ci-cd
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 8Gi
+#  selector:
+#    matchLabels:
+#      name: pipelines-for-containers-mariadb
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pipelines-for-containers-mariadb
+  labels:
+    app: pipelines-for-containers
+  namespace: ci-cd
+spec:
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: pipelines-for-containers
+      tier: database
+  template:
+    metadata:
+      labels:
+        app: pipelines-for-containers
+        tier: database
+    spec:
+      containers:
+        #- image: mariadb:10.3
+        - image: mysql:5.7
+          name: mariadb
+          env:
+            - name: MYSQL_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: mariadb-secrets
+                  key: mysql_root_password
+            - name: MYSQL_USER
+              valueFrom:
+                secretKeyRef:
+                  name: mariadb-secrets
+                  key: mysql_user
+            - name: MYSQL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: mariadb-secrets
+                  key: mysql_password
+            - name: MYSQL_DATABASE
+              valueFrom:
+                secretKeyRef:
+                  name: mariadb-secrets
+                  key: mysql_database
+          ports:
+            - containerPort: 3306
+              name: mariadb
+          volumeMounts:
+            - name: mariadb-local-storage
+              mountPath: /var/lib/mysql
+            - name: mariadb-init
+              mountPath: /docker-entrypoint-initdb.d
+      volumes:
+        - name: mariadb-local-storage
+          persistentVolumeClaim:
+            claimName: pipelines-for-containers-mariadb-claim
+        - name: mariadb-init
+          configMap:
+            name: mariadb-init
